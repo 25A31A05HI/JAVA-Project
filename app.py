@@ -1,100 +1,84 @@
+
 import os
 import requests
 import streamlit as st
 
-# ---------------------------------------------------------
-# AI Gift Planner - Streamlit Frontend
-# Connects to the Java GiftPlanner backend.
-# ---------------------------------------------------------
-
+# Page configuration
 st.set_page_config(
     page_title="AI Gift Planner",
     page_icon="🎁",
     layout="centered"
 )
 
-# Read the Java backend URL from Streamlit Secrets or
-# the JAVA_BACKEND_URL environment variable.
-def get_backend_url():
-    try:
-        secret_url = st.secrets.get("JAVA_BACKEND_URL", "")
-    except Exception:
-        secret_url = ""
+# Java backend URL
+BACKEND_URL = "https://ai-gift-planner-backend.onrender.com"
 
-    return secret_url or os.getenv(
-        "JAVA_BACKEND_URL",
-        "http://localhost:8000"
-    )
+# Custom styling
+st.markdown("""
+<style>
+.stApp {
+    background: linear-gradient(135deg, #fff7fb, #f4f0ff);
+}
+.main-title {
+    text-align: center;
+    color: #743b82;
+    font-size: 2.6rem;
+    font-weight: 800;
+}
+.subtitle {
+    text-align: center;
+    color: #66566b;
+    font-size: 1.05rem;
+}
+.result-card {
+    background: white;
+    border: 1px solid #eadcf0;
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 10px 0;
+    color: #392b40;
+}
+</style>
+""", unsafe_allow_html=True)
 
-
-st.markdown(
-    """
-    <style>
-        .stApp {
-            background: linear-gradient(135deg, #fff7fb 0%, #f4f0ff 100%);
-        }
-        .main-title {
-            text-align: center;
-            color: #743b82;
-            font-size: 2.6rem;
-            font-weight: 800;
-            margin-bottom: 0.2rem;
-        }
-        .subtitle {
-            text-align: center;
-            color: #66566b;
-            font-size: 1.05rem;
-            margin-bottom: 1.8rem;
-        }
-        .result-card {
-            background: white;
-            border: 1px solid #eadcf0;
-            border-radius: 14px;
-            padding: 16px 18px;
-            margin: 10px 0;
-            color: #392b40;
-            box-shadow: 0 3px 12px rgba(80, 40, 90, 0.06);
-        }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
+# Application heading
 st.markdown(
     '<div class="main-title">🎁 AI Gift Planner</div>',
     unsafe_allow_html=True
 )
+
 st.markdown(
     '<div class="subtitle">Find thoughtful gifts for the people who matter.</div>',
     unsafe_allow_html=True
 )
 
 st.write(
-    "Tell us a little about the recipient, and our gift planner "
-    "will suggest ideas based on the occasion, interests and budget."
+    "Tell us about the recipient and discover "
+    "gift ideas based on their preferences!"
 )
 
+# Gift planner form
 with st.form("gift_planner_form"):
-    st.subheader("💝 About the recipient")
+
+    st.subheader("💝 Recipient Details")
 
     name = st.text_input(
-        "Recipient's name *",
-        placeholder="e.g. Rahul"
+        "Recipient's Name",
+        placeholder="Enter recipient's name"
     )
 
     age = st.number_input(
-        "Recipient's age *",
+        "Age",
         min_value=1,
         max_value=120,
-        value=22,
-        step=1
+        value=22
     )
 
     relationship = st.selectbox(
-        "Your relationship with them",
+        "Your Relationship",
         [
             "Friend",
-            "Family member",
+            "Family Member",
             "Mother",
             "Father",
             "Sibling",
@@ -105,10 +89,10 @@ with st.form("gift_planner_form"):
         ]
     )
 
-    st.subheader("🎉 Gift preferences")
+    st.subheader("🎉 Gift Preferences")
 
     occasion = st.selectbox(
-        "Occasion *",
+        "Occasion",
         [
             "Birthday",
             "Anniversary",
@@ -123,12 +107,12 @@ with st.form("gift_planner_form"):
     )
 
     interests = st.text_input(
-        "Interests and hobbies",
-        placeholder="e.g. Technology, music, books, gaming"
+        "Interests and Hobbies",
+        placeholder="Technology, Music, Gaming, Books..."
     )
 
     budget = st.selectbox(
-        "Your budget (INR) *",
+        "Your Budget (INR)",
         [
             "Under 500",
             "500 - 1000",
@@ -145,10 +129,14 @@ with st.form("gift_planner_form"):
     )
 
 
+# Process user input
 if submitted:
+
     if not name.strip():
         st.error("Please enter the recipient's name.")
+
     else:
+
         payload = {
             "name": name.strip(),
             "age": str(age),
@@ -158,29 +146,37 @@ if submitted:
             "budget": budget
         }
 
-        backend_url = get_backend_url().rstrip("/")
-        endpoint = f"{backend_url}/recommend"
+        endpoint = f"{BACKEND_URL}/recommend"
 
-        with st.spinner("Finding gift ideas for you..."):
+        with st.spinner("Finding perfect gift ideas..."):
+
             try:
                 response = requests.post(
                     endpoint,
                     json=payload,
-                    timeout=30
+                    timeout=120
                 )
 
                 if response.status_code == 200:
+
                     data = response.json()
 
                     st.success("Your gift suggestions are ready!")
+
                     st.subheader(
-                        f"🎁 Gift ideas for {data.get('recipient', name)}"
+                        f"🎁 Gift Ideas for {data.get('recipient', name)}"
                     )
 
-                    recommendations = data.get("recommendations", [])
+                    recommendations = data.get(
+                        "recommendations", []
+                    )
 
                     if recommendations:
-                        for index, gift in enumerate(recommendations, 1):
+
+                        for index, gift in enumerate(
+                            recommendations, 1
+                        ):
+
                             st.markdown(
                                 f"""
                                 <div class="result-card">
@@ -189,56 +185,61 @@ if submitted:
                                 """,
                                 unsafe_allow_html=True
                             )
-                    else:
-                        st.info("The backend did not return any gift ideas.")
 
-                    message = data.get("message")
-                    if message:
-                        st.caption(message)
+                    else:
+                        st.info(
+                            "No gift recommendations received."
+                        )
+
+                    if data.get("message"):
+                        st.caption(data["message"])
 
                     st.caption(
-                        "These are initial suggestions from the Java backend. "
-                        "AI-powered recommendations will be added in the next step."
+                        "These are initial recommendations. "
+                        "Gemini AI integration will be added next!"
                     )
 
                 else:
                     try:
-                        error_message = response.json().get(
-                            "error",
-                            response.text
+                        error = response.json().get(
+                            "error", response.text
                         )
                     except ValueError:
-                        error_message = response.text
+                        error = response.text
 
                     st.error(
-                        f"Java backend returned error "
-                        f"{response.status_code}: {error_message}"
+                        f"Backend Error ({response.status_code}): {error}"
                     )
 
             except requests.exceptions.ConnectionError:
                 st.error(
-                    "Could not connect to the Java backend. "
-                    "Make sure GiftPlanner.java is running and that "
-                    "JAVA_BACKEND_URL points to the backend server."
+                    "Unable to connect to the Java backend. "
+                    "Please check whether the backend is running."
                 )
+
             except requests.exceptions.Timeout:
                 st.error(
-                    "The Java backend took too long to respond. "
+                    "The server took too long to respond. "
                     "Please try again."
                 )
+
             except requests.exceptions.RequestException as error:
                 st.error(f"Request failed: {error}")
+
             except ValueError:
                 st.error(
-                    "The backend response was not valid JSON. "
-                    "Please check the Java backend."
+                    "Invalid response received from Java backend."
                 )
 
 
+# Footer
 st.divider()
+
 st.markdown(
-    "<div style='text-align:center;color:#786b7d;'>"
-    "Made with 💜 for thoughtful gifting"
-    "</div>",
+    """
+    <div style="text-align:center;color:#786b7d;">
+        Made with 💜 for thoughtful gifting
+    </div>
+    """,
     unsafe_allow_html=True
 )
