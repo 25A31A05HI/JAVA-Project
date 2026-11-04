@@ -195,26 +195,64 @@ public class GiftPlanner {
             + escapeJson(prompt)
             + "\"}]}],\"generationConfig\":{\"temperature\":0.8,\"maxOutputTokens\":1200}}";
 
-        HttpRequest request = HttpRequest.newBuilder()
-            .uri(URI.create(GEMINI_URL))
-            .timeout(Duration.ofSeconds(90))
-            .header("Content-Type", "application/json")
-            .header("x-goog-api-key", apiKey)
-            .POST(HttpRequest.BodyPublishers.ofString(requestBody))
-            .build();
+        int maxAttempts = 4;
 
-        HttpResponse<String> response = CLIENT.send(
-            request,
-            HttpResponse.BodyHandlers.ofString()
-        );
+        HttpResponse<String> response = null;
 
-        if (response.statusCode() != 200) {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+
+            HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(GEMINI_URL))
+                .timeout(Duration.ofSeconds(90))
+                .header("Content-Type", "application/json")
+                .header("x-goog-api-key", apiKey)
+                .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                .build();
+
+            response = CLIENT.send(
+                request,
+                HttpResponse.BodyHandlers.ofString()
+            );
+
+            int status = response.statusCode();
+
+            if (status == 200) {
+                break;
+            }
+
             System.err.println(
-                "Gemini API error: " + response.statusCode()
+                "Gemini API error: " + status
+                + " (Attempt " + attempt + "/" + maxAttempts + ")"
                 + " - " + response.body()
             );
 
-            throw new RuntimeException("Gemini API request failed");
+            // Retry temporary errors only.
+            if (status != 429 && status != 500
+                    && status != 502 && status != 503
+                    && status != 504) {
+                throw new RuntimeException(
+                    "Gemini API returned error: " + status
+                );
+            }
+
+            if (attempt == maxAttempts) {
+                throw new RuntimeException(
+                    "Gemini is still unavailable after 4 attempts"
+                );
+            }
+
+            // Wait 2, 4, then 8 seconds before retrying.
+            long waitTime = 2000L * (1L << (attempt - 1));
+
+            System.out.println(
+                "Retrying Gemini in " + (waitTime / 1000) + " seconds..."
+            );
+
+            Thread.sleep(waitTime);
+        }
+
+        if (response == null || response.statusCode() != 200) {
+            throw new RuntimeException("Gemini request failed");
         }
 
         String responseText = getJsonString(
