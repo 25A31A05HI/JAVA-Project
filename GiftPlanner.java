@@ -1,25 +1,27 @@
-
-import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
 
 public class GiftPlanner {
 
     public static void main(String[] args) throws IOException {
+        // Hosting platforms provide the port through the PORT environment variable.
+        int port = Integer.parseInt(
+            System.getenv().getOrDefault("PORT", "8000")
+        );
 
         HttpServer server = HttpServer.create(
-            new InetSocketAddress(8000), 0
+            new InetSocketAddress("0.0.0.0", port), 0
         );
 
         server.createContext("/recommend", exchange -> {
-
-            if (!exchange.getRequestMethod().equals("POST")) {
+            if (!"POST".equalsIgnoreCase(exchange.getRequestMethod())) {
                 sendResponse(exchange, 405,
-                    "{\"error\":\"Only POST requests allowed\"}");
+                    "{\"error\":\"Only POST requests are allowed\"}");
                 return;
             }
 
@@ -29,100 +31,100 @@ public class GiftPlanner {
                     StandardCharsets.UTF_8
                 );
 
-                String name = getValue(request, "name");
-                String age = getValue(request, "age");
-                String relationship = getValue(request, "relationship");
-                String occasion = getValue(request, "occasion");
-                String interests = getValue(request, "interests");
-                String budget = getValue(request, "budget");
+                String name = getJsonString(request, "name");
+                String age = getJsonString(request, "age");
+                String relationship = getJsonString(request, "relationship");
+                String occasion = getJsonString(request, "occasion");
+                String interests = getJsonString(request, "interests");
+                String budget = getJsonString(request, "budget");
 
                 if (name.isBlank() || age.isBlank()
-                    || occasion.isBlank() || budget.isBlank()) {
-
+                        || occasion.isBlank() || budget.isBlank()) {
                     sendResponse(exchange, 400,
                         "{\"error\":\"Please provide all required details\"}");
                     return;
                 }
 
                 String result = generateRecommendations(
-                    name, age, relationship,
-                    occasion, interests, budget
+                    name, age, relationship, occasion, interests, budget
                 );
 
                 sendResponse(exchange, 200, result);
 
-            } catch (Exception e) {
+            } catch (IllegalArgumentException e) {
                 sendResponse(exchange, 400,
-                    "{\"error\":\"Invalid request\"}");
+                    "{\"error\":\"Invalid JSON request\"}");
+            } catch (Exception e) {
+                sendResponse(exchange, 500,
+                    "{\"error\":\"An internal server error occurred\"}");
             }
         });
 
         server.start();
-
-        System.out.println(
-            "AI Gift Planner backend running on port 8000"
-        );
+        System.out.println("Gift Planner backend running on port " + port);
     }
 
-    // Extract values from incoming JSON
-    private static String getValue(String json, String key) {
-
+    // Reads a string value from the simple JSON request sent by app.py.
+    private static String getJsonString(String json, String key) {
         String search = "\"" + key + "\"";
-        int start = json.indexOf(search);
+        int keyPosition = json.indexOf(search);
 
-        if (start == -1) return "";
+        if (keyPosition < 0) {
+            return "";
+        }
 
-        start = json.indexOf(":", start) + 1;
+        int colon = json.indexOf(':', keyPosition + search.length());
+        if (colon < 0) {
+            throw new IllegalArgumentException("Missing colon");
+        }
 
+        int start = colon + 1;
         while (start < json.length()
                 && Character.isWhitespace(json.charAt(start))) {
             start++;
         }
 
-        if (start >= json.length() || json.charAt(start) != '"')
+        if (start >= json.length() || json.charAt(start) != '"') {
             return "";
+        }
 
         start++;
-
         StringBuilder value = new StringBuilder();
         boolean escaped = false;
 
         for (int i = start; i < json.length(); i++) {
-
             char c = json.charAt(i);
 
             if (escaped) {
                 switch (c) {
-                    case 'n': value.append('\n'); break;
-                    case 'r': value.append('\r'); break;
-                    case 't': value.append('\t'); break;
-                    default: value.append(c);
+                    case 'n' -> value.append('\n');
+                    case 'r' -> value.append('\r');
+                    case 't' -> value.append('\t');
+                    case '"' -> value.append('"');
+                    case '\\' -> value.append('\\');
+                    default -> value.append(c);
                 }
                 escaped = false;
-            }
-            else if (c == '\\') {
+            } else if (c == '\\') {
                 escaped = true;
-            }
-            else if (c == '"') {
+            } else if (c == '"') {
                 return value.toString();
-            }
-            else {
+            } else {
                 value.append(c);
             }
         }
 
-        throw new IllegalArgumentException("Invalid JSON");
+        throw new IllegalArgumentException("Unterminated JSON string");
     }
 
-    // Generate gift recommendations
+    // Initial placeholder recommendations; Gemini AI will be integrated later.
     private static String generateRecommendations(
-        String name,
-        String age,
-        String relationship,
-        String occasion,
-        String interests,
-        String budget
-    ) {
+            String name,
+            String age,
+            String relationship,
+            String occasion,
+            String interests,
+            String budget) {
 
         String[] gifts = {
             "Personalized Gift Box",
@@ -134,34 +136,31 @@ public class GiftPlanner {
             "Handmade Memory Scrapbook"
         };
 
-        StringBuilder recommendations = new StringBuilder();
-
-        recommendations.append("{\"recipient\":\"")
+        StringBuilder json = new StringBuilder();
+        json.append("{\"recipient\":\"")
             .append(escapeJson(name))
             .append("\",\"recommendations\":[");
 
         for (int i = 0; i < gifts.length; i++) {
-
-            if (i > 0) recommendations.append(",");
-
-            recommendations.append("\"")
-                .append(escapeJson(gifts[i]))
-                .append("\"");
+            if (i > 0) {
+                json.append(",");
+            }
+            json.append("\"").append(escapeJson(gifts[i])).append("\"");
         }
 
-        recommendations.append("],\"message\":\"")
+        json.append("],\"message\":\"")
             .append(escapeJson(
-                "Gift suggestions prepared for " + name
-                + " based on the occasion: " + occasion
+                "Suggestions prepared for " + name
+                + " (age " + age + "), relationship: " + relationship
+                + ", occasion: " + occasion
                 + ", interests: " + interests
-                + ", and budget: " + budget
+                + ", budget: " + budget
             ))
             .append("\"}");
 
-        return recommendations.toString();
+        return json.toString();
     }
 
-    // Escape special JSON characters
     private static String escapeJson(String value) {
         return value.replace("\\", "\\\\")
                     .replace("\"", "\\\"")
@@ -170,27 +169,19 @@ public class GiftPlanner {
                     .replace("\t", "\\t");
     }
 
-    // Send response to Streamlit
     private static void sendResponse(
-        HttpExchange exchange,
-        int status,
-        String response
-    ) throws IOException {
+            HttpExchange exchange, int status, String response)
+            throws IOException {
 
         exchange.getResponseHeaders().set(
             "Content-Type", "application/json; charset=UTF-8"
         );
 
-        exchange.getResponseHeaders().set(
-            "Access-Control-Allow-Origin", "*"
-        );
-
         byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-
         exchange.sendResponseHeaders(status, bytes.length);
 
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
+        try (OutputStream output = exchange.getResponseBody()) {
+            output.write(bytes);
         }
     }
 }
