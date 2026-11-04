@@ -17,7 +17,7 @@ import java.util.List;
 public class GiftPlanner {
 
     private static final String GEMINI_URL =
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent";
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent";
 
     private static final HttpClient CLIENT = HttpClient.newBuilder()
         .connectTimeout(Duration.ofSeconds(30))
